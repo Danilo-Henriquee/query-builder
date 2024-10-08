@@ -1,4 +1,3 @@
-<?php require_once('./QueryBuilderBase.php') ?>
 <?php require_once('./models/select/Select.php') ?>
 
 <?php 
@@ -41,7 +40,7 @@ class QueryFactory {
         $selectQuery =  new Select([
             "tableName" => $this->tableName,
             "columns"   => $this->properties,
-        ]);
+        ], $this->db, $this->usuarioLogado, $this->lojaLogado);
 
         return $selectQuery;
     }

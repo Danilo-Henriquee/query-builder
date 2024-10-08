@@ -9,9 +9,13 @@ class Select extends SelectBase {
 
     private array $joinsStrings = [];
 
-    public function __construct(array $configs) {
+    public function __construct(array $configs, $db, $usuarioLogado, $lojaLogado) {
         $this->tableName = $configs["tableName"];
         $this->columns = $configs["columns"];
+
+        $this->db = $db;
+        $this->usuarioLogado = $usuarioLogado;
+        $this->lojaLogado = $lojaLogado;
     }
 
     public function select(array $excludedColumns = []) {
@@ -26,9 +30,11 @@ class Select extends SelectBase {
         return $this;
     }
 
-    public function where(array $conditions) {
-        $this->whereConditions = $conditions;
-        $this->whereString = "WHERE {$this->setupWhereConditions()} ";
+    public function where(array $conditions = []) {
+        if ($conditions != []) {
+            $this->whereConditions = $conditions;
+            $this->whereString = "WHERE {$this->setupWhereConditions()} ";
+        }
         return $this;
     }
 
@@ -45,20 +51,42 @@ class Select extends SelectBase {
     }
 
     public function execute() {
-        $query  = "";
+        $sql  = "";
         
-        $query .= $this->selectString;
-        $query .= $this->fromString;
+        $sql .= $this->selectString;
+        $sql .= $this->fromString;
 
         if ($this->joinsStrings != []) {
             foreach ($this->joinsStrings as $join) {
-                $query .= $join;
+                $sql .= $join;
             }
         }
 
-        $query .= $this->whereString;
+        $sql .= $this->whereString;
+        $conn = $this->db->getConnection();
 
-        exit(json_encode($query));
+        $items = [];
+        if ($this->whereValuesTypes != "" && $this->whereValues != []) {
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param($this->whereValuesTypes, ...$this->whereValues);
+            $stmt->execute();
+    
+            $result = $stmt->get_result();
+
+            while ($row =  $result->fetch_assoc()) {
+                $items[] = $row;
+            }
+
+            return $items;
+        }
+
+        $result = $conn->query($sql);
+        
+        while ($row = $result->fetch_assoc()) {
+            $items[] = $row;
+        }
+
+        return $items;
     }
 }
 

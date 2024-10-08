@@ -1,6 +1,10 @@
 <?php 
 
 class SelectBase {
+    protected $db;
+    protected $usuarioLogado;
+    protected $lojaLogado;
+
     protected string $tableName;
 
     /* SELECT */
@@ -9,6 +13,8 @@ class SelectBase {
 
     /* WHERE */
     protected array $whereConditions;
+    protected string $whereValuesTypes = "";
+    protected array $whereValues = [];
 
     /* LEFT JOIN */
     protected int $currentTableIndex = 1;
@@ -20,10 +26,8 @@ class SelectBase {
     }
 
     private function setupColumnsAlias() {
-        $columns = $this->columns;
-        
         $columnsWithAlias = [];
-        foreach ($columns as $column => $dbColumn) {
+        foreach ($this->columns as $column => $dbColumn) {
             $columnsWithAlias[] = "t.$dbColumn as $column";
         }
 
@@ -31,15 +35,14 @@ class SelectBase {
     }
 
     private function setupMultipleConditions($conditions) {
-        $whereString = "";
-
         $whereConditions = [];
         foreach ($conditions as $condition) {
             $column = $condition[0];
             $aritmetic = $condition[1];
-            $value = $this->formatIfValueIsString($condition[2]);
+            $this->whereValues[] = $this->formatIfValueIsString($condition[2]);
+            $this->whereValuesTypes .= $this->appendWhereParamType($condition[2]);
 
-            $whereConditions[] = "t.$column $aritmetic $value ";
+            $whereConditions[] = "t.$column $aritmetic ? ";
         }
         return implode("AND ", $whereConditions);
     }
@@ -49,6 +52,10 @@ class SelectBase {
             return "'$value'";
         }
         return $value;
+    }
+
+    private function appendWhereParamType($value) {
+        $this->whereValuesTypes .= gettype($value)[0];
     }
 
     protected function setupSelectColumns(): string {
@@ -80,9 +87,10 @@ class SelectBase {
 
         $column = $condition[0];
         $aritmetic = $condition[1];
-        $value = $this->formatIfValueIsString($condition[2]);
+        $this->whereValues[] = $this->formatIfValueIsString($condition[2]);
+        $this->appendWhereParamType($condition[2]);
 
-        $whereString = "$column $aritmetic $value";
+        $whereString = "$column $aritmetic ?";
 
         return $whereString;
     }

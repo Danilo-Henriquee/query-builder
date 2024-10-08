@@ -1,23 +1,22 @@
+<?php header("Content-Type: text/html; charset=utf-8",true); ?>
+<?php header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');?>
+<?php header('Access-Control-Allow-Headers', 'Origin, Content-Type, X-Auth-Token, authorization, X-Requested-With');?>
+<?php require_once("../include/config.php"); ?>
+
+<?php require_once("./router/Router.php") ?>
+<?php require_once("./QueryFactory.php") ?>
 <?php require_once("./entitys/NonConformity.php") ?>
-<?php require_once("./QueryBuilder.php") ?>
 
 <?php 
+$router = new Router();
+$queryFactory = new QueryFactory($db, $usuarioLogado, $lojaLogado);
 
-$query = new QueryFactory($db, $usuarioLogado, $lojaLogado);
-$query->initialize(NonConformity::class)->newSelectQuery()
-    ->select(["c_loja"])
-    ->from()
-    ->leftJoin(
-        "t_comercial_ordem_servico",
-        ["=", "c_ordem_servico"],
-        [["d_ordem_servico", "realOrderService"]]
-    )
-    ->leftJoin(
-        "t_comercial_ordem_servicooplaaa",
-        ["=", "c_ordem_servico"],
-    )
-    ->where([
-        ["c_tag", "=", "ola"]
-    ])
-    ->execute();
+$router->setQueryFactory($queryFactory);
+
+require("./routes/NonConformity.php");
+
+$router->router(
+    $_SERVER["REQUEST_METHOD"],
+    $_SERVER["PATH_INFO"]
+);
 ?>
