@@ -8,6 +8,7 @@ class Router {
 
     private string $requestMethod = "";
     private string $requestRoute = "";
+    private array $requestParams = [];
 
     private QueryFactory $queryFactory;
 
@@ -18,7 +19,7 @@ class Router {
                     &&
                 $route["route"] == $this->requestRoute
             ) {
-                $route["handler"]($this->queryFactory);
+                $route["handler"]($this->queryFactory, $this->requestParams);
                 return true;
             }
         }
@@ -37,10 +38,11 @@ class Router {
         }
     }
 
-    public function router(string $method, string $route) {
+    public function router(string $method, string $route, array &$params) {
         if ($this->routes != []) {
             $this->requestMethod = $method;
             $this->requestRoute = $route;
+            $this->requestParams = $params;
 
             if (!$this->checkRouteExistence()) {
                 throw new InvalidArgumentException("Method not allowed or route is not registered.");

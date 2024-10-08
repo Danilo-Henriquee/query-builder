@@ -1,9 +1,17 @@
 <?php
-    $router->get("/nonConformity")->handler(function ($queryFactory, mixed &...$params) {
-        $items = $queryFactory->initialize(NonConformity::class)->newSelectQuery()
+    $router->get("/nonConformity")->handler(function ($queryFactory, $params) {
+        $factory = $queryFactory->initialize(NonConformity::class);
+
+        $factory->appendExpectedParam("orderService", "c_ordem_servico", "=");
+        $factory->appendExpectedParam("startDate", "dt_inspecao", ">=");
+        $factory->appendExpectedParam("endDate", "dt_inspecao", "<=");
+
+        $conditions = $factory->bindWhereConditions($params);
+
+        $items = $factory->newSelectQuery()
             ->select(["c_loja"])
             ->from()
-            ->where([["c_ordem_servico", "=", 6357]])
+            ->where([...$conditions])
             ->execute();
 
         exit(json_encode($items));

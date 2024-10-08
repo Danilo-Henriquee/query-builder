@@ -39,19 +39,25 @@ class SelectBase {
         foreach ($conditions as $condition) {
             $column = $condition[0];
             $aritmetic = $condition[1];
-            $this->whereValues[] = $this->formatIfValueIsString($condition[2]);
+            $value = $this->formatWhereConditionValue($condition[2]);
+            $this->whereValues[] = $value;
             $this->whereValuesTypes .= $this->appendWhereParamType($condition[2]);
 
-            $whereConditions[] = "t.$column $aritmetic ? ";
+            $whereConditions[] = "t.$column $aritmetic $value ";
         }
         return implode("AND ", $whereConditions);
     }
 
-    private function formatIfValueIsString(mixed $value) {
-        if (gettype($value) == "string") {
+    private function formatWhereConditionValue(mixed $value) {
+        if (!is_numeric($value)) {
             return "'$value'";
         }
-        return $value;
+        if (filter_var($value, FILTER_VALIDATE_INT) !== false) {
+            return intval($value); 
+        }
+        if (filter_var($value, FILTER_VALIDATE_FLOAT) !== false) {
+            return floatval($value);
+        }
     }
 
     private function appendWhereParamType($value) {
@@ -87,10 +93,11 @@ class SelectBase {
 
         $column = $condition[0];
         $aritmetic = $condition[1];
-        $this->whereValues[] = $this->formatIfValueIsString($condition[2]);
+        $value = $this->formatWhereConditionValue($condition[2]);
+        $this->whereValues[] = $value;
         $this->appendWhereParamType($condition[2]);
 
-        $whereString = "$column $aritmetic ?";
+        $whereString = "$column $aritmetic $value";
 
         return $whereString;
     }

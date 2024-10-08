@@ -9,6 +9,8 @@ class Select extends SelectBase {
 
     private array $joinsStrings = [];
 
+    private mysqli_result $queryResult;
+
     public function __construct(array $configs, $db, $usuarioLogado, $lojaLogado) {
         $this->tableName = $configs["tableName"];
         $this->columns = $configs["columns"];
@@ -63,26 +65,36 @@ class Select extends SelectBase {
         }
 
         $sql .= $this->whereString;
+
+        exit(json_encode($sql));
+
         $conn = $this->db->getConnection();
 
-        $items = [];
-        if ($this->whereValuesTypes != "" && $this->whereValues != []) {
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param($this->whereValuesTypes, ...$this->whereValues);
-            $stmt->execute();
-    
-            $result = $stmt->get_result();
+        if ($this->isPreparedStatements()) {
+            $statement = $conn->prepare($sql);
+            $this->prepareStatements($statement);
 
-            while ($row =  $result->fetch_assoc()) {
-                $items[] = $row;
-            }
-
-            return $items;
+            return $this->getDataFromResult();
         }
 
-        $result = $conn->query($sql);
-        
-        while ($row = $result->fetch_assoc()) {
+        $this->queryResult = $conn->query($sql);
+        return $this->getDataFromResult();
+    }
+
+    private function isPreparedStatements(): bool {
+        return $this->whereValuesTypes != "" && $this->whereValues != [];
+    }
+
+    private function prepareStatements($statement) {
+        $statement->bind_param($this->whereValuesTypes, ...$this->whereValues);
+        $statement->execute();
+
+        $this->queryResult = $statement->get_result();
+    }
+
+    private function getDataFromResult(): array {
+        $items = [];
+        while ($row = $this->queryResult->fetch_assoc()) {
             $items[] = $row;
         }
 

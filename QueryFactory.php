@@ -9,6 +9,8 @@ class QueryFactory {
     private string $tableName;
     private array $properties;
 
+    private array $expectedQueryStrings = [];
+
     public function __construct($db, $usuarioLogado, $lojaLogado) {
         $this->db = $db;
         $this->usuarioLogado = $usuarioLogado;
@@ -34,6 +36,23 @@ class QueryFactory {
         $this->tableName = $tableName;
 
         return $this;
+    }
+
+    public function appendExpectedParam(string $queryStringName, string $columnDbName, string $operator) {
+        $this->expectedQueryStrings[$queryStringName] = ["columnName" => $columnDbName, "operator" => $operator];
+    }
+
+    public function bindWhereConditions(array &$params): array {
+        $conditions = [];
+        foreach ($params as $queryString => $queryStringValue) {
+            $queryConfig = $this->expectedQueryStrings[$queryString];
+
+            if ($queryConfig) {
+                $conditions[] = [$queryConfig["columnName"], $queryConfig["operator"], $queryStringValue];
+            }
+        }
+
+        return $conditions;
     }
 
     public function newSelectQuery() {
