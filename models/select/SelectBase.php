@@ -9,7 +9,8 @@ class SelectBase {
 
     /* SELECT */
     protected array $columns;
-    protected array $excludedColumns;
+    protected ?Columns $onlyColumns;
+    protected ?Columns $excludedColumns;
 
     /* WHERE */
     protected array $whereConditions;
@@ -17,65 +18,35 @@ class SelectBase {
     protected array $whereValues = [];
 
     /* LEFT JOIN */
+    protected array $joinsAliases;
     protected int $currentTableIndex = 1;
 
-    private function filterColumns(): array {
-        return array_filter($this->columns, function ($element) {
-            return !in_array($element, $this->excludedColumns);
-        });
-    }
-
-    private function setupColumnsAlias() {
-        $columnsWithAlias = [];
-        foreach ($this->columns as $column => $dbColumn) {
-            $columnsWithAlias[] = "t.$dbColumn as $column";
+    protected function definePropsFromRawArrayReflection() {
+        $columns = [];
+        foreach ($this->columns as $columnAlias => $columnDbName) {
+            $columns[] = Column::builder()
+                ->columnName($columnDbName)
+                ->alias($columnAlias)
+                ->build();
         }
 
-        $this->columns = $columnsWithAlias;
-    }
-
-    private function setupMultipleConditions($conditions) {
-        $whereConditions = [];
-        foreach ($conditions as $condition) {
-            $column = $condition[0];
-            $aritmetic = $condition[1];
-            $value = $this->formatWhereConditionValue($condition[2]);
-            $this->whereValues[] = $value;
-            $this->whereValuesTypes .= $this->appendWhereParamType($condition[2]);
-
-            $whereConditions[] = "t.$column $aritmetic $value ";
-        }
-        return implode("AND ", $whereConditions);
-    }
-
-    private function formatWhereConditionValue(mixed $value) {
-        if (!is_numeric($value)) {
-            return "'$value'";
-        }
-        if (filter_var($value, FILTER_VALIDATE_INT) !== false) {
-            return intval($value); 
-        }
-        if (filter_var($value, FILTER_VALIDATE_FLOAT) !== false) {
-            return floatval($value);
-        }
-    }
-
-    private function appendWhereParamType($value) {
-        $this->whereValuesTypes .= gettype($value)[0];
+        $this->columns = $columns;
     }
 
     protected function setupSelectColumns(): string {
-        $this->setupColumnsAlias();
-
-        $columns = $this->columns;
-
-        if ($this->excludedColumns != []) {
-            $columns = $this->filterColumns();
+        if ($this->onlyColumns != null && $this->excludedColumns == null) {
+            $this->columns = $this->onlyColumns->getColumns();
+        }
+        
+        if ($this->excludedColumns != null && $this->onlyColumns == null) {
+            $this->columns = $this->filterExcludedColumns();
         }
 
-        $columnsString = "";
-        $columnsString = implode(", ", $columns);
+        $preparedColumnsToImplode = $this->setupColumnsAlias();
 
+        $columnsString = "";
+        
+        $columnsString = implode(", ", $preparedColumnsToImplode);
         return $columnsString;
     }
 
@@ -91,35 +62,44 @@ class SelectBase {
 
         $condition = $conditions[0];
 
-        $column = $condition[0];
-        $aritmetic = $condition[1];
-        $value = $this->formatWhereConditionValue($condition[2]);
-        $this->whereValues[] = $value;
-        $this->appendWhereParamType($condition[2]);
+        $this->whereValues[] = $condition->getValue();
+        $this->appendWhereParamType($condition->getValue());
 
-        $whereString = "$column $aritmetic $value";
+        $whereString = "t.{$condition->getColumnName()} {$condition->getComparisonOperator()} ?";
 
         return $whereString;
     }
 
-    protected function setupLeftJoin(string $joinTableName, array $condition): string {
+    protected function setupLeftJoin(LeftJoin $joinTable): string {
         $index = $this->currentTableIndex;
-        
+
         $leftJoinString = "";
+        
+        $leftJoinString  = "LEFT JOIN {$joinTable->getTableName()} t$index ON ";
 
-        $leftJoinString  = "LEFT JOIN $joinTableName t$index ";
-        $leftJoinString .= "ON t.{$condition[1]} {$condition[0]} t$index.{$condition[1]} ";
+        if ($joinTable->getOverridedTableName() != "") {
+            $joinAlias = $this->joinsAliases[$joinTable->getOverridedTableName()];
 
+            if ($joinTable->getOverridedColumnName() != "") {
+                $leftJoinString .= "$joinAlias.{$joinTable->getOverridedColumnName()} {$joinTable->getCondition()} t$index.{$joinTable->getColumnName()} ";
+                return $leftJoinString;
+            }
+
+            $leftJoinString .= "t$index.{$joinTable->getColumnName()} {$joinTable->getCondition()} t$index.{$joinTable->getColumnName()} ";
+            return $leftJoinString;
+        }
+
+        $leftJoinString .= "t.{$joinTable->getColumnName()} {$joinTable->getCondition()} t$index.{$joinTable->getColumnName()} ";
         return $leftJoinString;
     }
 
-    protected function setupJoinColumns(array $columns): string {
+    protected function setupJoinColumns(Columns $columns): string {
         $index = $this->currentTableIndex;
         
         $columnArr = [];
-        foreach ($columns as $column) {
-            $columnName = $column[0];
-            $alias = $column[1];
+        foreach ($columns->getColumns() as $column) {
+            $columnName = $column->getColumnName();
+            $alias = $column->getAlias();
 
             if ($alias != "" && $alias != null) {
                 $columnArr[] = "t$index.$columnName as $alias ";
@@ -130,6 +110,48 @@ class SelectBase {
         }
         
         return implode(", ", $columnArr);
+    }
+
+    private function setupColumnsAlias(): array {
+        return array_map(function ($column) {
+            if ($column->getAlias() != "") {
+                return "t.{$column->getColumnName()} as {$column->getAlias()}";
+            }
+            return "t.{$column->getColumnName()}";
+        }, $this->columns);
+    }
+
+    private function filterExcludedColumns(): array {
+        $excludedColumnsNames = array_map(
+            function ($column) {
+                return $column->getColumnName();
+            },
+            $this->excludedColumns->getColumns()
+        );
+
+        $filteredColumns =  array_filter(
+            $this->columns,
+            function ($column) use ($excludedColumnsNames) {
+                return !in_array($column, $excludedColumnsNames);
+            }
+        );
+
+        return $filteredColumns;
+    }
+
+    private function setupMultipleConditions($conditions) {
+        $whereConditions = [];
+        foreach ($conditions as $condition) {
+            $this->whereValues[] = $condition->getValue();
+            $this->whereValuesTypes .= $condition->getValueTypeToPreparedStatement();
+
+            $whereConditions[] = "t.{$condition->getColumnName()} {$condition->getComparisonOperator()} ? ";
+        }
+        return implode("AND ", $whereConditions);
+    }
+
+    private function appendWhereParamType($value) {
+        $this->whereValuesTypes .= gettype($value)[0];
     }
 }
 

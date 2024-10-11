@@ -1,22 +1,28 @@
 <?php header("Content-Type: text/html; charset=utf-8",true); ?>
 <?php header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');?>
 <?php header('Access-Control-Allow-Headers', 'Origin, Content-Type, X-Auth-Token, authorization, X-Requested-With');?>
+<?php require_once("../include/config.php"); ?>
 
-<?php require_once("./router/Router.php") ?>
-<?php require_once("./QueryFactory.php") ?>
-<?php require_once("./entitys/NonConformity.php") ?>
+<?php require_once("./models/autoload.php"); ?>
 
-<?php 
+<?php require_once("./router/Router.php"); ?>
+<?php require_once("./QueryFactory.php"); ?>
+<?php require_once("./entitys/NonConformity.php"); ?>
+
+<?php
 $router = new Router();
 $queryFactory = new QueryFactory($db, $usuarioLogado, $lojaLogado);
-
 $router->setQueryFactory($queryFactory);
+
+$rawBody = file_get_contents('php://input');
+$body = json_decode($rawBody);
 
 require("./routes/NonConformity.php");
 
 $router->router(
     $_SERVER["REQUEST_METHOD"],
     $_SERVER["PATH_INFO"],
-    $_GET
+    $_GET,
+    $body
 );
 ?>

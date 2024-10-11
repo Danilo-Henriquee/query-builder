@@ -1,5 +1,3 @@
-<?php require_once('./models/select/Select.php') ?>
-
 <?php 
 class QueryFactory {
     private $db;
@@ -38,20 +36,29 @@ class QueryFactory {
         return $this;
     }
 
-    public function appendExpectedParam(string $queryStringName, string $columnDbName, string $operator) {
-        $this->expectedQueryStrings[$queryStringName] = ["columnName" => $columnDbName, "operator" => $operator];
+    public function appendExpectedWhereParams(Params $params) {
+        foreach ($params->getParams() as $param) {
+            $mapKey = $param->getQueryStringUrlName();
+            
+            $this->expectedQueryStrings[$mapKey] = $param;
+        }
+        
+        return $this;
     }
 
-    public function bindWhereConditions(array &$params): array {
+    public function bindQueryStringsToWhereConditions(array &$params): array {
         $conditions = [];
         foreach ($params as $queryString => $queryStringValue) {
-            $queryConfig = $this->expectedQueryStrings[$queryString];
-
-            if ($queryConfig) {
-                $conditions[] = [$queryConfig["columnName"], $queryConfig["operator"], $queryStringValue];
+            $param = $this->expectedQueryStrings[$queryString];
+            
+            if ($param) {
+                $conditions[] = Condition::builder()
+                    ->columnName($param->getDbColumnName())
+                    ->comparisonOperator($param->getOperator())
+                    ->value($queryStringValue)->prepareValueToQuery()
+                    ->build();
             }
         }
-
         return $conditions;
     }
 

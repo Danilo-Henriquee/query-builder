@@ -1,4 +1,4 @@
-<?php require_once('./models/select/SelectBase.php') ?>
+<?php require_once __DIR__ . '/SelectBase.php' ?>
 
 <?php 
 
@@ -15,13 +15,17 @@ class Select extends SelectBase {
         $this->tableName = $configs["tableName"];
         $this->columns = $configs["columns"];
 
+        $this->definePropsFromRawArrayReflection();
+
         $this->db = $db;
         $this->usuarioLogado = $usuarioLogado;
         $this->lojaLogado = $lojaLogado;
     }
 
-    public function select(array $excludedColumns = []) {
+    public function select(?Columns $onlyColumns = null, ?Columns $excludedColumns = null) {
+        $this->onlyColumns = $onlyColumns;
         $this->excludedColumns = $excludedColumns;
+
         $this->selectString = "SELECT {$this->setupSelectColumns()} ";
         return $this;
     }
@@ -35,13 +39,17 @@ class Select extends SelectBase {
     public function where(array $conditions = []) {
         if ($conditions != []) {
             $this->whereConditions = $conditions;
+            $this->validadeArgumentConditions();
             $this->whereString = "WHERE {$this->setupWhereConditions()} ";
         }
         return $this;
     }
 
-    public function leftJoin(string $joinTableName, array $condition, array $columnsToJoin = []) {
-        $this->joinsStrings[] = $this->setupLeftJoin($joinTableName, $condition);
+    public function leftJoin(LeftJoin $leftJoin) {
+        $this->joinsAliases[$leftJoin->getTableName()] = "t$this->currentTableIndex";
+        $this->joinsStrings[] = $this->setupLeftJoin($leftJoin);
+        
+        $columnsToJoin = $leftJoin->getColumnsToJoin();
 
         if ($columnsToJoin != []) {
             $this->selectString .= ", {$this->setupJoinColumns($columnsToJoin)}";
@@ -49,7 +57,7 @@ class Select extends SelectBase {
 
         $this->currentTableIndex++;
 
-        return $this;
+        return $this; 
     }
 
     public function execute() {
@@ -65,9 +73,7 @@ class Select extends SelectBase {
         }
 
         $sql .= $this->whereString;
-
-        exit(json_encode($sql));
-
+        exit($sql);
         $conn = $this->db->getConnection();
 
         if ($this->isPreparedStatements()) {
@@ -79,6 +85,14 @@ class Select extends SelectBase {
 
         $this->queryResult = $conn->query($sql);
         return $this->getDataFromResult();
+    }
+
+    private function validadeArgumentConditions() {
+        foreach ($this->whereConditions as $condition) {
+            if (!$condition instanceof Condition) {
+                throw new InvalidArgumentException("Condition must be type of Condition");
+            }
+        }
     }
 
     private function isPreparedStatements(): bool {

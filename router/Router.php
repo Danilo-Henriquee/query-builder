@@ -8,23 +8,11 @@ class Router {
 
     private string $requestMethod = "";
     private string $requestRoute = "";
+
     private array $requestParams = [];
+    private array $requestBody = [];
 
     private QueryFactory $queryFactory;
-
-    private function checkRouteExistence(): bool {
-        foreach ($this->routes as $route) {
-            if (
-                $route["method"] == $this->requestMethod 
-                    &&
-                $route["route"] == $this->requestRoute
-            ) {
-                $route["handler"]($this->queryFactory, $this->requestParams);
-                return true;
-            }
-        }
-        return false;
-    }
 
     public function setQueryFactory(QueryFactory $queryFactory) {
         $this->queryFactory = $queryFactory;
@@ -38,13 +26,18 @@ class Router {
         }
     }
 
-    public function router(string $method, string $route, array &$params) {
+    public function router(string $method, string $route, &$params, $body) {
         if ($this->routes != []) {
             $this->requestMethod = $method;
             $this->requestRoute = $route;
-            $this->requestParams = $params;
 
-            if (!$this->checkRouteExistence()) {
+            $this->requestParams = $params;
+            
+            if ($method == "POST") {
+                $this->requestBody = $body;
+            }
+
+            if (!$this->checkRouteExistenceAndExecute()) {
                 throw new InvalidArgumentException("Method not allowed or route is not registered.");
             }
         }
@@ -52,6 +45,12 @@ class Router {
 
     public function get(string $route) {
         $this->method = "GET";
+        $this->route = $route;
+        return $this;
+    }
+
+    public function post(string $route) {
+        $this->method = "POST";
         $this->route = $route;
         return $this;
     }
@@ -65,6 +64,28 @@ class Router {
 
         $this->method = "";
         $this->route = "";
+    }
+
+    private function checkRouteExistenceAndExecute(): bool {
+        foreach ($this->routes as $route) {
+            if (
+                $route["method"] == $this->requestMethod 
+                    &&
+                $route["route"] == $this->requestRoute
+            ) {
+                $this->executeRouteHandler($route["handler"]);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function executeRouteHandler(callable $callback) {
+        if ($this->method === "POST") {
+            $callback($this->queryFactory, $this->requestParams, $this->requestBody);
+            return;
+        }
+        $callback($this->queryFactory, $this->requestParams);
     }
 }
 
